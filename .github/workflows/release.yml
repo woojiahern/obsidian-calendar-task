@@ -31,7 +31,11 @@ jobs:
               run: |
                   [ -f styles.css ] && echo "exists=true" >> "$GITHUB_OUTPUT" || echo "exists=false" >> "$GITHUB_OUTPUT"
 
+            # GitHub does not offer build attestation on user-owned private
+            # repositories, so this step is skipped while the repo is private
+            # and runs on its own once the repo is public.
             - name: Attest build provenance
+              if: ${{ !github.event.repository.private }}
               uses: actions/attest@v4
               with:
                   subject-path: |
