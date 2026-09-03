@@ -46,6 +46,11 @@ that has them, up to three. A deadline gets a red dot, drawn first, so a busy
 day still shows it. The selected day drops its dots. Click an item to open that
 note at that line.
 
+The calendar stays put and only the list below it scrolls, so the month is
+always in view. Each item is trimmed to a readable summary: inline fields like
+`(product:: …)`, markdown links, and formatting are stripped, and long lines
+are clamped to two lines.
+
 Below the grid sits one of two lists:
 
 - **Nothing selected** — the week ahead. Today plus the next six days, soonest

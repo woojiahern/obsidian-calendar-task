@@ -430,24 +430,101 @@ export function findDatedFields(line: string): DatedField[] {
 /** Strips the list bullet, the number, and the task checkbox from a line. */
 const LIST_MARKER_RE = /^\s*(?:[-*+]|\d+[.)])\s+(?:\[.\]\s+)?/;
 
+/** Opens an inline field: "(", a key, then "::". */
+const FIELD_OPEN_RE = /^\(\s*[A-Za-z][\w-]*\s*::/;
+
+/**
+ * Removes every inline field on a line, whatever its key.
+ *
+ * "(product:: #elsa-school)" and "(pr:: [PR #88](https://github.com/...))" are
+ * metadata, not prose, so neither belongs in a one-line summary.
+ *
+ * A regex cannot do this properly. A field can hold a markdown link, and that
+ * link brings its own brackets, so "[^)]*" would stop at the first ")" inside
+ * the URL and leave the rest of the field behind. This walks the line instead
+ * and counts bracket depth to find the real end of each field.
+ */
+function removeInlineFields(line: string): string {
+	let result = '';
+	let index = 0;
+
+	while (index < line.length) {
+		if (line[index] === '(' && FIELD_OPEN_RE.test(line.slice(index))) {
+			let depth = 0;
+			let scan = index;
+			for (; scan < line.length; scan++) {
+				if (line[scan] === '(') depth++;
+				else if (line[scan] === ')') {
+					depth--;
+					if (depth === 0) {
+						scan++;
+						break;
+					}
+				}
+			}
+			index = scan;
+			result += ' ';
+			continue;
+		}
+
+		result += line[index];
+		index++;
+	}
+
+	return result;
+}
+
+/**
+ * Turns markdown into the words it renders as.
+ *
+ * The sidebar draws plain text, so raw syntax shows through: a note reading
+ * "**Teachers can author** their own" would appear with its asterisks. Each
+ * rule keeps the visible words and drops the punctuation around them.
+ */
+function stripMarkdown(text: string): string {
+	return (
+		text
+			// [[Page|Alias]] shows the alias, [[Page]] shows the page name.
+			.replace(/!?\[\[[^\]|]*\|([^\]]+)\]\]/g, '$1')
+			.replace(/!?\[\[([^\]]+)\]\]/g, '$1')
+			// [PR #88](https://…) shows "PR #88".
+			.replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+			// `code`, **bold**, *italic*, __bold__, ==highlight==, ~~struck~~.
+			.replace(/`([^`]+)`/g, '$1')
+			.replace(/\*\*([^*]+)\*\*/g, '$1')
+			.replace(/__([^_]+)__/g, '$1')
+			.replace(/\*([^*]+)\*/g, '$1')
+			.replace(/==([^=]+)==/g, '$1')
+			.replace(/~~([^~]+)~~/g, '$1')
+	);
+}
+
 /**
  * Builds the text we show in the day list.
  *
- * We remove the list marker, the checkbox, any (when:: …) or (by:: …) field,
- * and every date on the line. The day heading already says which day you are
- * looking at, so a date in the text is noise. A line with two dates appears on
- * both days, and reads the same on each.
+ * The list is a summary, not the note. So we drop the list marker and the
+ * checkbox, every inline field, all markdown syntax, and every date. The day
+ * heading already says which day you are looking at, so a date in the text is
+ * noise, and a line with two dates reads the same on both days.
  *
  * Text that only looks like a date, such as 2026-13-45, is left alone. It is
  * not a date, so it is part of what the line says.
  */
 export function displayText(line: string): string {
 	const withoutMarker = line.replace(LIST_MARKER_RE, '');
-	const withoutFields = withoutMarker.replace(FIELD_RE, ' ');
-	const withoutDates = withoutFields.replace(ISO_DATE_RE, (match) =>
+	const withoutFields = removeInlineFields(withoutMarker);
+	const withoutSyntax = stripMarkdown(withoutFields);
+	const withoutDates = withoutSyntax.replace(ISO_DATE_RE, (match) =>
 		fromIso(match) ? ' ' : match,
 	);
-	const tidied = withoutDates.replace(/\s+/g, ' ').trim();
+	// Collapse the gaps everything above left behind, and tidy punctuation that
+	// is now stranded, such as a dangling comma before a full stop.
+	const tidied = withoutDates
+		.replace(/\s+/g, ' ')
+		.replace(/\s+([,.;:!?])/g, '$1')
+		.replace(/\(\s*\)/g, '')
+		.trim();
+
 	// If the line was nothing but a date, fall back to the raw text so the
 	// item is never a blank row.
 	return tidied.length > 0 ? tidied : withoutMarker.trim();

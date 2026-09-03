@@ -1,7 +1,7 @@
 {
 	"id": "calendar-task",
 	"name": "Calendar Task",
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"minAppVersion": "1.7.2",
 	"description": "Tag a line with a date, then see it on a sidebar calendar.",
 	"author": "Matthew Woo",

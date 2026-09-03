@@ -6,8 +6,20 @@
  * light or dark.
  */
 
+/* The panel is a fixed calendar with a scrolling list beneath it. A flex
+   column pins the header and grid at their natural height and gives the rest
+   of the space to the list. */
 .calendar-task-view {
-	padding: 12px 12px 20px;
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	overflow: hidden;
+	padding: 12px 12px 0;
+}
+
+.calendar-task-header,
+.calendar-task-grid {
+	flex: 0 0 auto;
 }
 
 /* ---------- Header ---------- */
@@ -197,9 +209,15 @@
 
 /* ---------- Day list ---------- */
 
+/* min-height:0 is what actually lets this scroll. Without it a flex child
+   refuses to shrink below its content, so the whole panel scrolls instead. */
 .calendar-task-daylist {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow-y: auto;
 	margin-top: 18px;
 	padding-top: 16px;
+	padding-bottom: 16px;
 	border-top: 1px solid var(--background-modifier-border);
 }
 
@@ -255,13 +273,20 @@
 	gap: 8px;
 }
 
-/* min-width lets the text wrap instead of pushing the flag off the panel. */
+/* min-width lets the text wrap instead of pushing the flag off the panel.
+   The clamp keeps a long line to two lines: the list is a summary, and one
+   note should never push everything else off the screen. */
 .calendar-task-item-line .calendar-task-item-text {
 	flex: 1;
 	min-width: 0;
 	font-size: var(--font-ui-small);
 	color: var(--text-normal);
 	line-height: 1.35;
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	line-clamp: 2;
+	overflow: hidden;
 }
 
 .calendar-task-item-source {
@@ -269,6 +294,9 @@
 	color: var(--text-faint);
 	margin-top: 1px;
 	line-height: 1.3;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .calendar-task-item.is-done .calendar-task-item-text {
