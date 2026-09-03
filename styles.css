@@ -1,0 +1,486 @@
+/* Calendar Task
+ *
+ * Styled after Material 3: generous corner radii, circular day cells, pill
+ * buttons, and tonal surfaces instead of borders. Every colour comes from
+ * Obsidian's own theme variables, so the panel follows whatever theme is set,
+ * light or dark.
+ */
+
+.calendar-task-view {
+	padding: 12px 12px 20px;
+}
+
+/* ---------- Header ---------- */
+
+.calendar-task-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	margin-bottom: 14px;
+	padding: 0 2px;
+}
+
+.calendar-task-title {
+	display: flex;
+	align-items: baseline;
+	gap: 7px;
+	font-size: 1.5em;
+	font-weight: 600;
+	letter-spacing: -0.01em;
+}
+
+.calendar-task-title-month {
+	color: var(--text-normal);
+}
+
+/* The year carries the accent, so the eye lands on the month name first. */
+.calendar-task-title-year {
+	color: var(--text-accent);
+}
+
+.calendar-task-controls {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+}
+
+/* Material 3 outlined buttons: a full-round pill, a 1px outline, and the plain
+   surface behind it rather than a grey fill. Shared by the sidebar controls and
+   the buttons inside the "@" popup.
+ *
+ * Each selector names a parent, the element, and the class on purpose.
+ * Obsidian styles every button with a grey fill through a rule that outranks a
+ * plain single class, so a lone .calendar-task-nav quietly loses and the button
+ * stays grey. Naming three things wins that fight without reaching for
+ * !important. */
+.calendar-task-view button.calendar-task-nav,
+.calendar-task-view button.calendar-task-today,
+.calendar-task-popup button.calendar-task-picker-nav,
+.calendar-task-popup button.calendar-task-picker-quick-button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	background-color: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 999px;
+	color: var(--text-normal);
+	cursor: pointer;
+	box-shadow: none;
+	transition:
+		background-color 80ms ease-out,
+		border-color 80ms ease-out;
+}
+
+.calendar-task-view button.calendar-task-nav:hover,
+.calendar-task-view button.calendar-task-today:hover,
+.calendar-task-popup button.calendar-task-picker-nav:hover,
+.calendar-task-popup button.calendar-task-picker-quick-button:hover {
+	background-color: var(--background-modifier-hover);
+	border-color: var(--background-modifier-border-hover);
+	color: var(--text-normal);
+}
+
+.calendar-task-view button.calendar-task-nav {
+	width: 32px;
+	height: 32px;
+	padding: 0;
+	color: var(--text-muted);
+}
+
+.calendar-task-nav .svg-icon {
+	width: 18px;
+	height: 18px;
+}
+
+/* A text button rather than an icon, so its job is unambiguous. */
+.calendar-task-view button.calendar-task-today {
+	height: 32px;
+	padding: 0 14px;
+	font-size: var(--font-ui-smaller);
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	color: var(--text-muted);
+}
+
+/* ---------- Month grid ---------- */
+
+.calendar-task-grid {
+	display: grid;
+	grid-template-columns: repeat(7, 1fr);
+	gap: 2px;
+}
+
+.calendar-task-weekday {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	height: 28px;
+	font-size: var(--font-ui-smaller);
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: var(--text-faint);
+}
+
+.calendar-task-day {
+	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	aspect-ratio: 1 / 1;
+	/* A full circle is the Material 3 shape for a selected day. */
+	border-radius: 999px;
+	font-size: var(--font-ui-small);
+	color: var(--text-normal);
+	cursor: pointer;
+	transition: background-color 80ms ease-out;
+}
+
+.calendar-task-day:hover {
+	background-color: var(--background-modifier-hover);
+}
+
+.calendar-task-day-number {
+	line-height: 1;
+}
+
+.calendar-task-day.is-outside {
+	color: var(--text-faint);
+}
+
+.calendar-task-day.is-today {
+	color: var(--text-accent);
+	font-weight: 700;
+}
+
+.calendar-task-day.is-selected {
+	background-color: var(--interactive-accent);
+	color: var(--text-on-accent);
+	font-weight: 600;
+}
+
+.calendar-task-day.is-selected.is-today {
+	color: var(--text-on-accent);
+}
+
+/* One dot per item on that day, up to three. */
+.calendar-task-dots {
+	position: absolute;
+	bottom: 5px;
+	display: flex;
+	gap: 2px;
+}
+
+.calendar-task-dot {
+	width: 3px;
+	height: 3px;
+	border-radius: 999px;
+	background-color: var(--text-muted);
+}
+
+/* A deadline gets a red dot, so the day reads as urgent from the grid alone. */
+.calendar-task-dot.is-due {
+	background-color: var(--text-error);
+}
+
+.calendar-task-day.is-outside .calendar-task-dot {
+	background-color: var(--text-faint);
+}
+
+/* The selected day drops its dots. The filled circle already says the day has
+   your attention, and dots sitting inside it just break the shape. */
+.calendar-task-day.is-selected .calendar-task-dots {
+	display: none;
+}
+
+/* ---------- Day list ---------- */
+
+.calendar-task-daylist {
+	margin-top: 18px;
+	padding-top: 16px;
+	border-top: 1px solid var(--background-modifier-border);
+}
+
+.calendar-task-daylist-heading {
+	font-size: var(--font-ui-smaller);
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	color: var(--text-muted);
+	margin-bottom: 6px;
+	padding: 0 2px;
+}
+
+/* In the upcoming list one date heading follows another day's items, so it
+   needs room above it. The first heading in the panel does not. */
+.calendar-task-item + .calendar-task-daylist-heading {
+	margin-top: 14px;
+}
+
+.calendar-task-empty {
+	font-size: var(--font-ui-small);
+	color: var(--text-faint);
+	padding: 0 2px;
+}
+
+.calendar-task-group-label {
+	font-size: var(--font-ui-smaller);
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	color: var(--text-faint);
+	margin: 10px 0 4px;
+	padding: 0 2px;
+}
+
+.calendar-task-item {
+	padding: 5px 10px;
+	margin-bottom: 1px;
+	border-radius: 14px;
+	background-color: transparent;
+	cursor: pointer;
+	transition: background-color 80ms ease-out;
+}
+
+.calendar-task-item:hover {
+	background-color: var(--background-modifier-hover);
+}
+
+.calendar-task-item-line {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+/* min-width lets the text wrap instead of pushing the flag off the panel. */
+.calendar-task-item-line .calendar-task-item-text {
+	flex: 1;
+	min-width: 0;
+	font-size: var(--font-ui-small);
+	color: var(--text-normal);
+	line-height: 1.35;
+}
+
+.calendar-task-item-source {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-faint);
+	margin-top: 1px;
+	line-height: 1.3;
+}
+
+.calendar-task-item.is-done .calendar-task-item-text {
+	text-decoration: line-through;
+	color: var(--text-faint);
+}
+
+/* The deadline flag, parked on the right. It sits on the text baseline rather
+   than centred, so a wrapping item keeps the flag beside the first line. */
+.calendar-task-flag {
+	display: inline-flex;
+	align-items: center;
+	flex-shrink: 0;
+	color: var(--text-error);
+	transform: translateY(2px);
+}
+
+.calendar-task-flag .svg-icon {
+	width: 13px;
+	height: 13px;
+}
+
+.calendar-task-item.is-done .calendar-task-flag {
+	color: var(--text-faint);
+}
+
+/* ---------- Date chips ---------- */
+
+/* Applied to every ISO date, in the editor and in Reading view. The text
+   underneath is untouched, so the date stays selectable and searchable. */
+.calendar-task-chip {
+	background-color: var(--background-modifier-hover);
+	border-radius: 999px;
+	padding: 1px 8px;
+	color: var(--text-muted);
+	font-size: 0.88em;
+	white-space: nowrap;
+	box-decoration-break: clone;
+	-webkit-box-decoration-break: clone;
+}
+
+/* A chip is clickable: clicking one jumps the sidebar calendar to that day. */
+.calendar-task-chip:hover {
+	background-color: var(--background-modifier-active-hover);
+	color: var(--text-normal);
+}
+
+.markdown-preview-view .calendar-task-chip {
+	font-variant-numeric: tabular-nums;
+	cursor: pointer;
+}
+
+/* ---------- The "@" popup ---------- */
+
+/* The panel is the popup's only item, so strip the list-row styling it
+   inherits: no highlight, no row padding, no pointer. */
+.suggestion-item.calendar-task-popup,
+.suggestion-item.calendar-task-popup.is-selected {
+	background-color: transparent;
+	padding: 6px;
+	cursor: default;
+}
+
+/* Command list */
+
+.calendar-task-commands {
+	min-width: min(208px, calc(100vw - 60px));
+}
+
+/* A menu row, not a button: Material 3 puts a modest radius on list items and
+   saves the full pill for buttons. A pill this wide reads as one huge control. */
+.calendar-task-command {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 14px;
+	padding: 6px 10px;
+	border-radius: 10px;
+	cursor: pointer;
+}
+
+.calendar-task-command:hover,
+.calendar-task-command.is-selected {
+	background-color: var(--background-modifier-hover);
+}
+
+.calendar-task-command-name {
+	font-size: var(--font-ui-small);
+	font-weight: 600;
+	color: var(--text-normal);
+}
+
+.calendar-task-command-hint {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	white-space: nowrap;
+}
+
+/* Date picker */
+
+/* min() keeps the picker on screen on a phone, where a fixed 272px popup can
+   run off the edge. */
+.calendar-task-picker {
+	width: min(272px, calc(100vw - 48px));
+	padding: 4px;
+}
+
+.calendar-task-picker-quick {
+	display: flex;
+	gap: 6px;
+	margin-bottom: 12px;
+}
+
+.calendar-task-popup button.calendar-task-picker-quick-button {
+	flex: 1;
+	height: 32px;
+	padding: 0 8px;
+	font-size: var(--font-ui-smaller);
+	font-weight: 500;
+}
+
+.calendar-task-picker-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 6px;
+	padding: 0 4px;
+}
+
+.calendar-task-picker-title {
+	font-size: var(--font-ui-small);
+	font-weight: 600;
+	color: var(--text-normal);
+}
+
+.calendar-task-popup button.calendar-task-picker-nav {
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	color: var(--text-muted);
+}
+
+.calendar-task-picker-nav .svg-icon {
+	width: 16px;
+	height: 16px;
+}
+
+.calendar-task-picker-grid {
+	display: grid;
+	grid-template-columns: repeat(7, 1fr);
+	gap: 2px;
+}
+
+.calendar-task-picker-weekday {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	height: 24px;
+	font-size: var(--font-ui-smaller);
+	font-weight: 600;
+	color: var(--text-faint);
+}
+
+.calendar-task-picker-day {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	aspect-ratio: 1 / 1;
+	border-radius: 999px;
+	font-size: var(--font-ui-small);
+	color: var(--text-normal);
+	cursor: pointer;
+	transition: background-color 80ms ease-out;
+}
+
+.calendar-task-picker-day:hover {
+	background-color: var(--background-modifier-hover);
+}
+
+.calendar-task-picker-day.is-outside {
+	color: var(--text-faint);
+}
+
+.calendar-task-picker-day.is-today {
+	font-weight: 700;
+	color: var(--text-accent);
+}
+
+.calendar-task-picker-day.is-focused {
+	background-color: var(--interactive-accent);
+	color: var(--text-on-accent);
+	font-weight: 600;
+}
+
+/* ---------- The jump-to-line flash ---------- */
+
+/* Clicking an item opens the note and Obsidian flashes that line with its own
+   .is-flashing class. On a list line the bullet or checkbox sits in the marker
+   area, which is outside the highlighted box, so the row lights up from the
+   text onwards and looks half-finished.
+ *
+ * A box-shadow with no blur and no spread paints a copy of the box shifted
+ * left, which fills the marker gutter. It needs no pseudo-element, so it does
+ * not collide with the ::before and ::after Obsidian already uses on list
+ * items, and the same rule works in the editor and in Reading view even though
+ * their markup is completely different.
+ *
+ * The 2em is Obsidian's list indent. It is the one number to change if a theme
+ * indents lists differently. */
+.markdown-source-view .cm-line.HyperMD-list-line.is-flashing,
+.markdown-preview-view li.is-flashing {
+	box-shadow: -2em 0 0 0 var(--text-highlight-bg);
+	/* Square off the left corners so the strip and the row read as one band. */
+	border-radius: 0 var(--radius-s) var(--radius-s) 0;
+}
