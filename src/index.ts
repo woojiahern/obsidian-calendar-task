@@ -45,8 +45,11 @@ export class TaskIndex {
 	/** Folder paths whose notes are kept off the calendar. */
 	private excludedFolders: string[] = [];
 
-	/** When true, a date only counts inside an inline field. */
-	private requireInlineField = true;
+	/** Whether a bare date in a line's text counts. */
+	private countBareDates = false;
+
+	/** Whether a date in a heading applies to the list under it. */
+	private countHeadingDates = false;
 
 	/** Called after any change, so the view can redraw. */
 	private onChanged: () => void = () => undefined;
@@ -95,9 +98,10 @@ export class TaskIndex {
 		this.excludedFolders = folders;
 	}
 
-	/** Whether a date needs an inline field around it to count. */
-	setRequireInlineField(value: boolean): void {
-		this.requireInlineField = value;
+	/** Where dates are allowed to come from, besides inline fields. */
+	setDateSources(sources: { bare: boolean; headings: boolean }): void {
+		this.countBareDates = sources.bare;
+		this.countHeadingDates = sources.headings;
 	}
 
 	/* ---------------------------------------------------------------------- */
@@ -223,12 +227,9 @@ export class TaskIndex {
 
 		const content = await this.app.vault.cachedRead(file);
 		const lines = content.split('\n');
-		// A heading is not an inline field, so a date in one only counts under
-		// the looser rule. Otherwise a daily note titled "# 2026-09-15" sweeps
-		// its whole list onto that day, which is noise rather than a plan.
-		const inheritedDates = this.requireInlineField
-			? new Map<number, string>()
-			: buildInheritedDates(cache?.headings ?? [], lines);
+		const inheritedDates = this.countHeadingDates
+			? buildInheritedDates(cache?.headings ?? [], lines)
+			: new Map<number, string>();
 		const items: TaskItem[] = [];
 
 		for (const listItem of listItems) {
@@ -241,24 +242,25 @@ export class TaskIndex {
 			// A line is filed under every date it contains, each tagged with what
 			// the date means. One line carrying a when:: date and a by:: date
 			// appears on both days, in the matching section.
-			// Every date on the line, with the field it came from. When the
-			// setting asks for fields only, a bare date is dropped here: it is
-			// almost always a mention rather than a plan, and it is what made
-			// the calendar noisy on a real vault.
+			// Every date on the line, with the field it came from. A date in a
+			// field always counts. A bare one is a mention more often than a
+			// plan, so it only counts when asked for.
 			const allDates = findDatedFields(raw);
-			const ownDates = this.requireInlineField
-				? allDates.filter((dated) => dated.field !== null)
-				: allDates;
+			const ownDates = this.countBareDates
+				? allDates
+				: allDates.filter((dated) => dated.field !== null);
 
-			// No date on the line, so inherit the heading's date if there is one.
-			// An inherited date has no field around it, so it counts as plain.
+			// A heading's date is added to whatever the line already carries,
+			// rather than only filling in for a line with no date of its own.
+			// Both mean something and they mean different things: under a
+			// release-date heading, an item with (staged:: 2026-08-17) was
+			// staged that day and ships on the heading's day, so it belongs on
+			// both. A heading date the line already names is not repeated.
 			const inherited = inheritedDates.get(lineNumber) ?? null;
-			const dates =
-				ownDates.length > 0
-					? ownDates
-					: inherited
-						? [{ iso: inherited, kind: 'plain' as const, field: null }]
-						: [];
+			const dates = [...ownDates];
+			if (inherited && !dates.some((dated) => dated.iso === inherited)) {
+				dates.push({ iso: inherited, kind: 'plain', field: null });
+			}
 
 			for (const dated of dates) {
 				items.push({
@@ -308,62 +310,59 @@ function addTo(
 /** The shape we need from Obsidian's heading cache. */
 type HeadingCache = {
 	heading: string;
+	level: number;
 	position: { end: { line: number } };
 };
 
-/** A line that starts a list item: a bullet, or a number. */
-const LIST_LINE_RE = /^\s*(?:[-*+]|\d+[.)])\s+/;
-
-/** A line that continues the item above it, such as wrapped text. */
-const CONTINUATION_RE = /^\s+\S/;
-
 /**
- * Works out which lines inherit a date from a heading above them.
+ * Works out the date in force on every line, from the headings above it.
  *
- * A dated heading covers the list directly under it, and stops at the first
- * blank line. Nothing further down the note is touched:
+ * A dated heading covers its whole section, including any sub-headings, and
+ * stops at the next heading of the same level or higher:
  *
- *   ## 2026-09-03
- *                      <- blank lines between the heading and the list are fine
- *   - [ ] task 1       <- inherits 2026-09-03
- *   - [ ] task 2       <- inherits 2026-09-03
- *                      <- the blank line ends the block
- *   Some prose.
- *   - [ ] task 3       <- no date, so it never reaches the calendar
+ *   ## 2026-09-24            <- the release date
+ *   ### Native Speech...     <- no date of its own, so it keeps 2026-09-24
+ *   - Speech Analyzer...     <- filed under 2026-09-24
+ *   ## Gated                 <- same level as the dated heading, so it stops
+ *   - something else         <- no date
  *
- * Keeping the scope this tight matters. A note titled "# 2026-09-03" would
- * otherwise sweep every bullet in the whole note onto that one day, including
- * reference notes that were never tasks.
+ * The stack holds the chain of ancestors. A new heading pops every heading at
+ * its own level or deeper, because those are siblings or children, not parents.
  *
- * This reads the raw lines rather than Obsidian's list positions. Those
- * positions can cover more than the item's own line, which quietly stretched
- * the block past the blank line it was meant to stop at.
+ * This only runs when "count dates in headings" is on. It is deliberately
+ * broad: a note titled "# 2026-09-15" dates everything in it, which is right
+ * for a release plan and wrong for a daily note. Exclude the daily folder.
  */
 export function buildInheritedDates(
 	headings: ReadonlyArray<HeadingCache>,
 	lines: string[],
 ): Map<number, string> {
-	const inherited = new Map<number, string>();
+	const byLine = new Map<number, string>();
+	const ancestors: Array<{ level: number; date: string | null }> = [];
 
-	for (const heading of headings) {
-		const date = findIsoDates(heading.heading)[0];
-		if (!date) continue;
+	let next = 0;
+	let current: string | null = null;
 
-		let line = heading.position.end.line + 1;
+	for (let line = 0; line < lines.length; line++) {
+		const heading = headings[next];
+		if (heading && heading.position.end.line === line) {
+			while (ancestors.length > 0) {
+				const top = ancestors[ancestors.length - 1];
+				if (top && top.level >= heading.level) ancestors.pop();
+				else break;
+			}
 
-		// Step over the blank lines that usually sit under a heading.
-		while (line < lines.length && (lines[line] ?? '').trim() === '') line++;
+			const ownDate = findIsoDates(heading.heading)[0] ?? null;
+			const parentDate = ancestors[ancestors.length - 1]?.date ?? null;
+			current = ownDate ?? parentDate;
 
-		// Then take the run of list lines. It ends at the first line that is
-		// neither a list item nor a continuation of one: a blank line, a
-		// paragraph, or the next heading.
-		while (line < lines.length) {
-			const text = lines[line] ?? '';
-			if (!LIST_LINE_RE.test(text) && !CONTINUATION_RE.test(text)) break;
-			inherited.set(line, date);
-			line++;
+			ancestors.push({ level: heading.level, date: current });
+			next++;
+			continue;
 		}
+
+		if (current) byLine.set(line, current);
 	}
 
-	return inherited;
+	return byLine;
 }

@@ -148,9 +148,25 @@ export default class CalendarTaskPlugin extends Plugin {
 			}
 		}
 
+		// 0.3.x had a single "requireInlineField" switch covering both of the
+		// sources below. Carry an old setting across rather than silently
+		// resetting someone to the defaults.
 		if (saved && typeof saved === 'object' && 'requireInlineField' in saved) {
-			const flag: unknown = saved.requireInlineField;
-			if (typeof flag === 'boolean') settings.requireInlineField = flag;
+			const legacy: unknown = saved.requireInlineField;
+			if (typeof legacy === 'boolean') {
+				settings.countBareDates = !legacy;
+				settings.countHeadingDates = !legacy;
+			}
+		}
+
+		if (saved && typeof saved === 'object' && 'countBareDates' in saved) {
+			const flag: unknown = saved.countBareDates;
+			if (typeof flag === 'boolean') settings.countBareDates = flag;
+		}
+
+		if (saved && typeof saved === 'object' && 'countHeadingDates' in saved) {
+			const flag: unknown = saved.countHeadingDates;
+			if (typeof flag === 'boolean') settings.countHeadingDates = flag;
 		}
 
 		this.settings = settings;
@@ -161,7 +177,7 @@ export default class CalendarTaskPlugin extends Plugin {
 		if (this.settings.excludedFolders.includes(folder)) return;
 		this.settings.excludedFolders.push(folder);
 		this.settings.excludedFolders.sort((a, b) => a.localeCompare(b));
-		await this.applyExclusions();
+		await this.applySettings();
 	}
 
 	/** Starts scanning a folder again. */
@@ -169,21 +185,27 @@ export default class CalendarTaskPlugin extends Plugin {
 		this.settings.excludedFolders = this.settings.excludedFolders.filter(
 			(candidate) => candidate !== folder,
 		);
-		await this.applyExclusions();
+		await this.applySettings();
 	}
 
-	/** Switches between counting every date and only fielded ones. */
-	async setRequireInlineField(value: boolean): Promise<void> {
-		this.settings.requireInlineField = value;
-		await this.applyExclusions();
+	/** Whether a bare date in a line's text counts. */
+	async setCountBareDates(value: boolean): Promise<void> {
+		this.settings.countBareDates = value;
+		await this.applySettings();
+	}
+
+	/** Whether a date in a heading applies to the list under it. */
+	async setCountHeadingDates(value: boolean): Promise<void> {
+		this.settings.countHeadingDates = value;
+		await this.applySettings();
 	}
 
 	/**
 	 * Saves the settings and rescans. A full rebuild is the honest way to apply
-	 * any of them: excluding a folder has to remove what it already
-	 * contributed, and including one has to pick up everything it holds.
+	 * any of them: turning a source off has to remove what it contributed, and
+	 * turning one on has to pick up everything it now matches.
 	 */
-	private async applyExclusions(): Promise<void> {
+	private async applySettings(): Promise<void> {
 		await this.saveData(this.settings);
 		this.applySettingsToIndex();
 		await this.index.rebuildAll();
@@ -191,7 +213,10 @@ export default class CalendarTaskPlugin extends Plugin {
 
 	private applySettingsToIndex(): void {
 		this.index.setExcludedFolders(this.settings.excludedFolders);
-		this.index.setRequireInlineField(this.settings.requireInlineField);
+		this.index.setDateSources({
+			bare: this.settings.countBareDates,
+			headings: this.settings.countHeadingDates,
+		});
 	}
 
 	/** Opens the calendar if needed, then shows the given day. */

@@ -64,28 +64,33 @@ the week ahead.
 
 ## Settings
 
-**Only count dates in inline fields** (on by default). A date counts only when
-it is written as a field:
+A date in an inline field always counts. The other two sources are noisier, so
+each has its own switch, both off by default.
+
+**Count bare dates.** Picks up a date written plainly in a line, with no field
+around it. Off by default, because it also catches every date mentioned in
+passing and every `[[2026-09-15]]` link.
+
+**Count dates in headings.** A dated heading covers its whole section,
+sub-headings included, and stops at the next heading of the same level or
+higher. Turn this on when a heading is a release date:
 
 ```markdown
-- [ ] Shipped the build (released:: 2026-08-12)
-- [ ] Review with Thomas (by:: 2026-08-20)
+## 2026-09-24
+
+### Native Speech Analyzer
+
+- Speech Analyzer built into the student app (staged:: 2026-08-17)
 ```
 
-Any key works — `released::`, `staged::`, `raised::`, `resolved::` — and each
-item shows which field its date came from. `by::`, `due::` and `deadline::` are
-the ones that mean a deadline, so they get the flag and the **Due** section.
+That item lands on both days: 17 August because it was staged then, and
+24 September because that is when it ships. Each date keeps its own meaning,
+and a heading date the line already names is not repeated.
 
-Turn this off to also pick up bare dates written in the text, and dates in
-headings. That is the looser rule, and on a real vault it pulls in a lot: every
-`[[2026-09-15]]` daily-note link, every date mentioned in passing, and every
-bullet under a daily note's own title.
+The catch is that a daily note titled `# 2026-09-15` dates everything it holds.
+Exclude that folder below if you turn headings on.
 
-**Excluded folders.** The rest of the tab is a list of folders to leave out of
-the scan.
-Pick a folder and the calendar stops showing anything inside it, including its
-subfolders. Useful for archives, templates, and anything else whose dates are
-history rather than plans.
+**Excluded folders.** A list of folders to leave out of the scan entirely.
 
 ## Where dates can go
 

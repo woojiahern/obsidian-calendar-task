@@ -13,15 +13,22 @@ export interface CalendarTaskSettings {
 	/** Vault-relative folder paths whose notes never reach the calendar. */
 	excludedFolders: string[];
 	/**
-	 * When true, only dates written inside an inline field count, such as
-	 * (released:: 2026-08-12). A bare date sitting in the text is ignored.
+	 * Count a date written bare in a line's text, with no field around it.
+	 * Off by default: a date mentioned in passing is rarely a plan.
 	 */
-	requireInlineField: boolean;
+	countBareDates: boolean;
+	/**
+	 * Count a date in a heading, which then applies to the list under it.
+	 * Off by default, because a daily note titled with its own date would
+	 * otherwise sweep every bullet it holds onto that day.
+	 */
+	countHeadingDates: boolean;
 }
 
 export const DEFAULT_SETTINGS: CalendarTaskSettings = {
 	excludedFolders: [],
-	requireInlineField: true,
+	countBareDates: false,
+	countHeadingDates: false,
 };
 
 /**
@@ -47,23 +54,42 @@ export class CalendarTaskSettingTab extends PluginSettingTab {
 
 	display(): void {
 		this.containerEl.empty();
-		this.renderFieldToggle();
+		this.renderSourceToggles();
 		this.renderAddControl();
 		this.renderExcludedList();
 	}
 
-	/** Whether a date needs an inline field around it to count. */
-	private renderFieldToggle(): void {
+	/**
+	 * Where a date is allowed to come from.
+	 *
+	 * An inline field always counts, so it needs no toggle. The other two
+	 * sources are noisier, and which of them is useful depends on how the
+	 * vault is written, so each is its own switch.
+	 */
+	private renderSourceToggles(): void {
 		new Setting(this.containerEl)
-			.setName('Only count dates in inline fields')
+			.setName('Count bare dates')
 			.setDesc(
-				'A date counts only when it is written as a field, such as (released:: 2026-08-12) or (by:: 2026-08-20). Any field name works. Turn this off to also pick up bare dates written in the text, and dates in headings.',
+				'Pick up a date written plainly in a line, with no field around it. Off by default, because it also catches every date mentioned in passing and every [[2026-09-15]] link.',
 			)
 			.addToggle((toggle) =>
 				toggle
-					.setValue(this.plugin.settings.requireInlineField)
+					.setValue(this.plugin.settings.countBareDates)
 					.onChange(async (value) => {
-						await this.plugin.setRequireInlineField(value);
+						await this.plugin.setCountBareDates(value);
+					}),
+			);
+
+		new Setting(this.containerEl)
+			.setName('Count dates in headings')
+			.setDesc(
+				'A dated heading applies to the list directly under it, up to the first blank line. Useful when a heading is a release date. Off by default, because a daily note titled with its own date would sweep in everything it holds — exclude that folder below if you turn this on.',
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.countHeadingDates)
+					.onChange(async (value) => {
+						await this.plugin.setCountHeadingDates(value);
 					}),
 			);
 	}
