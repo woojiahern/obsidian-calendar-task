@@ -31,16 +31,54 @@ export type DateClickHandler = (iso: string) => void;
 /**
  * Reads the date out of a clicked element, if it was a chip.
  *
- * Returns null for anything else, and for a chip whose text is not a real
- * date. A decoration can be split by another one that overlaps it, which would
- * leave half a date in the span, so the value is always checked.
+ * It searches the chip's text for a date rather than demanding the text be
+ * exactly one. A mark decoration can be split or merged by another decoration
+ * that overlaps it, so the span may carry a stray space or a neighbouring
+ * character, and an exact comparison would quietly fail on a perfectly good
+ * chip.
  */
 function clickedDate(target: EventTarget | null): string | null {
 	if (!(target instanceof HTMLElement)) return null;
 	const chip = target.closest(`.${CHIP_CLASS}`);
 	if (!chip) return null;
-	const text = chip.textContent ?? '';
-	return fromIso(text) ? text : null;
+	return firstDateIn(chip.textContent ?? '');
+}
+
+/** The first real date in a piece of text, or null if there is none. */
+function firstDateIn(text: string): string | null {
+	DATE_RE.lastIndex = 0;
+	let match: RegExpExecArray | null;
+	while ((match = DATE_RE.exec(text)) !== null) {
+		if (fromIso(match[0])) return match[0];
+	}
+	return null;
+}
+
+/**
+ * Finds the date sitting under a click, by asking the editor which character
+ * was clicked and reading that line's text.
+ *
+ * This is the reliable route in the editor: it never touches the DOM, so no
+ * amount of decoration splitting can confuse it. The chip's own text is only
+ * used as a fallback.
+ */
+function dateAtCoords(view: EditorView, x: number, y: number): string | null {
+	const position = view.posAtCoords({ x, y });
+	if (position === null) return null;
+
+	const line = view.state.doc.lineAt(position);
+	const offset = position - line.from;
+
+	DATE_RE.lastIndex = 0;
+	let match: RegExpExecArray | null;
+	while ((match = DATE_RE.exec(line.text)) !== null) {
+		const start = match.index;
+		const end = start + match[0].length;
+		// Allow the very end of the date too, so a click on its right edge
+		// still counts.
+		if (offset >= start && offset <= end && fromIso(match[0])) return match[0];
+	}
+	return null;
 }
 
 /** Plain ISO date, no capture groups needed here. */
@@ -106,8 +144,12 @@ export function createDateChipExtension(onDateClick: DateClickHandler): Extensio
 	return [
 		chipDecorations,
 		EditorView.domEventHandlers({
-			click: (event) => {
-				const iso = clickedDate(event.target);
+			click: (event, view) => {
+				// Ask the editor what was clicked first, and only fall back to
+				// reading the chip's own text.
+				const iso =
+					dateAtCoords(view, event.clientX, event.clientY) ??
+					clickedDate(event.target);
 				if (iso) onDateClick(iso);
 				// false lets the editor handle the click as usual.
 				return false;

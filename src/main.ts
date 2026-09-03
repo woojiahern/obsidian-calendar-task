@@ -126,11 +126,24 @@ export default class CalendarTaskPlugin extends Plugin {
 
 	/** Opens the calendar in the right sidebar, or reveals it if already open. */
 	private async activateView(): Promise<void> {
-		const existing = this.app.workspace.getLeavesOfType(CALENDAR_VIEW_TYPE);
-		const leaf = existing[0] ?? this.app.workspace.getRightLeaf(false);
-		if (!leaf) return;
+		let leaf = this.app.workspace.getLeavesOfType(CALENDAR_VIEW_TYPE)[0] ?? null;
 
-		await leaf.setViewState({ type: CALENDAR_VIEW_TYPE, active: true });
+		if (!leaf) {
+			leaf = this.app.workspace.getRightLeaf(false);
+			if (!leaf) return;
+			// Only a new leaf needs its view set. Doing this to a leaf that is
+			// already showing the calendar would tear the view down and rebuild
+			// it, losing the day you had selected.
+			await leaf.setViewState({ type: CALENDAR_VIEW_TYPE, active: true });
+		}
+
+		// A collapsed sidebar has to be opened explicitly. revealLeaf brings the
+		// calendar to the front of its sidebar, but it will not slide a shut
+		// sidebar open, so clicking a date in a note appeared to do nothing.
+		if (this.app.workspace.rightSplit.collapsed) {
+			this.app.workspace.rightSplit.expand();
+		}
+
 		await this.app.workspace.revealLeaf(leaf);
 	}
 }
