@@ -47,8 +47,14 @@ export default class CalendarTaskPlugin extends Plugin {
 		// Draw dates as chips: the CodeMirror extension covers the editor, the
 		// post-processor covers Reading view. Clicking a chip in either one
 		// jumps the calendar to that day.
+		// Deferred to the next tick on purpose. Obsidian finishes handling the
+		// click after us: it puts focus back in the editor and settles the
+		// layout, which slams a sidebar shut if we opened it mid-click. Running
+		// once the click is over means nothing follows us to undo it.
 		const onDateClick = (iso: string) => {
-			void this.showDate(iso);
+			window.setTimeout(() => {
+				void this.showDate(iso);
+			}, 0);
 		};
 		this.registerEditorExtension(createDateChipExtension(onDateClick));
 		this.registerMarkdownPostProcessor((element) => {
@@ -202,13 +208,13 @@ export default class CalendarTaskPlugin extends Plugin {
 			await leaf.setViewState({ type: CALENDAR_VIEW_TYPE, active: true });
 		}
 
-		// A collapsed sidebar has to be opened explicitly. revealLeaf brings the
-		// calendar to the front of its sidebar, but it will not slide a shut
-		// sidebar open, so clicking a date in a note appeared to do nothing.
+		await this.app.workspace.revealLeaf(leaf);
+
+		// revealLeaf brings the calendar to the front of its sidebar but will
+		// not slide a shut sidebar open, so open it here. This runs after the
+		// reveal, because revealing can leave a collapsed sidebar collapsed.
 		if (this.app.workspace.rightSplit.collapsed) {
 			this.app.workspace.rightSplit.expand();
 		}
-
-		await this.app.workspace.revealLeaf(leaf);
 	}
 }
