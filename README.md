@@ -62,6 +62,13 @@ Below the grid sits one of two lists:
 Click a day to select it. Click the same day again to clear it and go back to
 the week ahead.
 
+## Settings
+
+**Settings → Calendar Task** holds one list: folders to leave out of the scan.
+Pick a folder and the calendar stops showing anything inside it, including its
+subfolders. Useful for archives, templates, and anything else whose dates are
+history rather than plans.
+
 ## Where dates can go
 
 **On the line itself.** Any list line, bullet or task:
@@ -209,4 +216,5 @@ Then open `test-vault` in Obsidian with **Open folder as vault**.
 | `src/commands.ts`| The four `@` commands                                  |
 | `src/chip.ts`    | Renders dates as chips, in the editor and reading view |
 | `src/view.ts`    | The sidebar calendar                                   |
+| `src/settings.ts`| The settings tab and the excluded-folder list          |
 | `styles.css`     | All styling, using Obsidian's theme variables          |

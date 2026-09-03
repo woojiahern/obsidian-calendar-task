@@ -34,6 +34,15 @@ export class TaskIndex {
 	/** file path -> items from that file. Lets us re-index one file cheaply. */
 	private byPath = new Map<string, TaskItem[]>();
 
+	/** Bumped on every rebuild, so an older overlapping one knows to stop. */
+	private generation = 0;
+
+	/** Files waiting to be re-scanned on the next flush. */
+	private readonly pendingPaths = new Set<string>();
+
+	/** Folder paths whose notes are kept off the calendar. */
+	private excludedFolders: string[] = [];
+
 	/** Called after any change, so the view can redraw. */
 	private onChanged: () => void = () => undefined;
 
@@ -76,40 +85,93 @@ export class TaskIndex {
 		return this.byPath.size;
 	}
 
+	/** Folders whose notes never reach the calendar. */
+	setExcludedFolders(folders: string[]): void {
+		this.excludedFolders = folders;
+	}
+
 	/* ---------------------------------------------------------------------- */
 	/* Building the index                                                     */
 	/* ---------------------------------------------------------------------- */
 
-	/** Scans every markdown file. Run once at startup and after a bulk change. */
+	/**
+	 * Scans every markdown file. Run at startup, and after a settings change.
+	 *
+	 * Two things here stop the index doubling up. The scan builds into fresh
+	 * maps and swaps them in at the end, so a rebuild never appends onto the
+	 * results of another one. And each run takes a generation number: if a
+	 * newer rebuild starts while this one is awaiting a file read, this one
+	 * drops its work rather than writing stale results over the new ones.
+	 *
+	 * Both matter because two rebuilds really do overlap at startup, one on
+	 * layout ready and one when the metadata cache finishes resolving. Without
+	 * this, every item in the vault was indexed twice and showed up twice.
+	 */
 	async rebuildAll(): Promise<void> {
-		this.byDate.clear();
-		this.byPath.clear();
+		const generation = ++this.generation;
+		const byDate = new Map<string, TaskItem[]>();
+		const byPath = new Map<string, TaskItem[]>();
 
-		const files = this.app.vault.getMarkdownFiles();
-		for (const file of files) {
+		for (const file of this.app.vault.getMarkdownFiles()) {
+			if (this.isExcluded(file.path)) continue;
+
 			const items = await this.scanFile(file);
-			this.store(file.path, items);
+			// A newer rebuild has taken over. Its results are the current ones.
+			if (generation !== this.generation) return;
+			addTo(byDate, byPath, file.path, items);
 		}
+
+		this.byDate = byDate;
+		this.byPath = byPath;
 		this.onChanged();
 	}
 
 	/**
-	 * Re-indexes one file. Debounced, because Obsidian fires a cache event on
-	 * nearly every keystroke and a burst of scans would be wasted work.
+	 * Marks a file as needing a re-scan.
+	 *
+	 * The paths are collected in a set and flushed together, rather than
+	 * debouncing the file itself. A debounced function keeps only the last
+	 * arguments it was called with, so editing one note and then another
+	 * inside the debounce window would quietly drop the first one.
 	 */
-	readonly queueFile = debounce(
-		(file: TFile) => {
-			void this.reindexFile(file);
+	queueFile(file: TFile): void {
+		this.pendingPaths.add(file.path);
+		this.flushPending();
+	}
+
+	/**
+	 * Re-scans the queued files. Debounced, because Obsidian fires a cache
+	 * event on nearly every keystroke and a burst of scans is wasted work.
+	 */
+	private readonly flushPending = debounce(
+		() => {
+			void this.reindexPending();
 		},
 		300,
 		true,
 	);
 
-	private async reindexFile(file: TFile): Promise<void> {
-		const items = await this.scanFile(file);
-		this.removePath(file.path);
-		this.store(file.path, items);
+	private async reindexPending(): Promise<void> {
+		const paths = [...this.pendingPaths];
+		this.pendingPaths.clear();
+
+		for (const path of paths) {
+			const file = this.app.vault.getFileByPath(path);
+			if (!file || this.isExcluded(path)) {
+				this.removePath(path);
+				continue;
+			}
+			const items = await this.scanFile(file);
+			this.removePath(path);
+			addTo(this.byDate, this.byPath, path, items);
+		}
 		this.onChanged();
+	}
+
+	private isExcluded(path: string): boolean {
+		return this.excludedFolders.some(
+			(folder) => path === folder || path.startsWith(`${folder}/`),
+		);
 	}
 
 	/** Drops a file from the index, for deletes and for the old path on rename. */
@@ -125,16 +187,6 @@ export class TaskIndex {
 			else this.byDate.delete(item.date);
 		}
 		this.byPath.delete(path);
-	}
-
-	private store(path: string, items: TaskItem[]): void {
-		if (items.length === 0) return;
-		this.byPath.set(path, items);
-		for (const item of items) {
-			const dayItems = this.byDate.get(item.date) ?? [];
-			dayItems.push(item);
-			this.byDate.set(item.date, dayItems);
-		}
 	}
 
 	/**
@@ -202,6 +254,27 @@ export class TaskIndex {
 		}
 
 		return items;
+	}
+}
+
+/**
+ * Files one file's items into a pair of maps.
+ *
+ * It takes the maps as arguments rather than reading the index's own, so a
+ * rebuild can assemble a complete set privately and swap it in when it is done.
+ */
+function addTo(
+	byDate: Map<string, TaskItem[]>,
+	byPath: Map<string, TaskItem[]>,
+	path: string,
+	items: TaskItem[],
+): void {
+	if (items.length === 0) return;
+	byPath.set(path, items);
+	for (const item of items) {
+		const dayItems = byDate.get(item.date) ?? [];
+		dayItems.push(item);
+		byDate.set(item.date, dayItems);
 	}
 }
 
