@@ -1,4 +1,4 @@
-# Calendar Task
+# Calendar Tasks
 
 An Obsidian plugin. Tag a line with a date, then see that line on a sidebar calendar.
 

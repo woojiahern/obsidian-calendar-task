@@ -1,5 +1,5 @@
 /**
- * Calendar Task — plugin entry point.
+ * Calendar Tasks — plugin entry point.
  *
  * Wires three pieces together:
  *   suggest.ts  the "@" date popup

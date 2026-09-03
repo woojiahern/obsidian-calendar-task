@@ -53,7 +53,7 @@ export class CalendarView extends ItemView {
 	}
 
 	getDisplayText(): string {
-		return 'Calendar tasks';
+		return 'Calendar Tasks';
 	}
 
 	getIcon(): string {
