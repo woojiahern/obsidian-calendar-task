@@ -57,7 +57,7 @@ export class CalendarTaskSettingTab extends PluginSettingTab {
 		new Setting(this.containerEl)
 			.setName('Only count dates in inline fields')
 			.setDesc(
-				'A date counts only when it is written as a field, such as (released:: 2026-08-12) or (by:: 2026-08-20). Any field name works. Turn this off to also pick up bare dates written in the text.',
+				'A date counts only when it is written as a field, such as (released:: 2026-08-12) or (by:: 2026-08-20). Any field name works. Turn this off to also pick up bare dates written in the text, and dates in headings.',
 			)
 			.addToggle((toggle) =>
 				toggle

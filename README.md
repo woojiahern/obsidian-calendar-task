@@ -76,9 +76,10 @@ Any key works — `released::`, `staged::`, `raised::`, `resolved::` — and eac
 item shows which field its date came from. `by::`, `due::` and `deadline::` are
 the ones that mean a deadline, so they get the flag and the **Due** section.
 
-Turn this off to also pick up bare dates written in the text. That is the
-looser rule, and on a real vault it pulls in a lot: every `[[2026-09-15]]`
-daily-note link, every date mentioned in passing.
+Turn this off to also pick up bare dates written in the text, and dates in
+headings. That is the looser rule, and on a real vault it pulls in a lot: every
+`[[2026-09-15]]` daily-note link, every date mentioned in passing, and every
+bullet under a daily note's own title.
 
 **Excluded folders.** The rest of the tab is a list of folders to leave out of
 the scan.
@@ -94,8 +95,9 @@ history rather than plans.
 - [ ] Send the invoice 2026-09-10
 ```
 
-**Under a heading.** A dated heading covers the list directly under it, so a
-daily log needs the date once:
+**Under a heading**, when **Only count dates in inline fields** is off. A dated
+heading then covers the list directly under it, so a daily log needs the date
+once:
 
 ```markdown
 ## 2026-09-03
@@ -108,9 +110,9 @@ Prose here. The blank line above already ended the block.
 - [ ] this one has no date
 ```
 
-The block stops at the first blank line after the list. That keeps the scope
-tight: a note titled `# 2026-09-03` covers the list under the title, not every
-bullet in the note.
+The block stops at the first blank line after the list. Even so, a daily note
+titled `# 2026-09-15` pulls in the list under its title, which is why headings
+only count under the looser rule.
 
 **Twice on one line.** Two dates on a line put it on both days, and the item
 reads the same on each. If a bare date and a `by::` land on the same day, the

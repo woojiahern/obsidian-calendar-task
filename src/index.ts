@@ -223,7 +223,12 @@ export class TaskIndex {
 
 		const content = await this.app.vault.cachedRead(file);
 		const lines = content.split('\n');
-		const inheritedDates = buildInheritedDates(cache?.headings ?? [], lines);
+		// A heading is not an inline field, so a date in one only counts under
+		// the looser rule. Otherwise a daily note titled "# 2026-09-15" sweeps
+		// its whole list onto that day, which is noise rather than a plan.
+		const inheritedDates = this.requireInlineField
+			? new Map<number, string>()
+			: buildInheritedDates(cache?.headings ?? [], lines);
 		const items: TaskItem[] = [];
 
 		for (const listItem of listItems) {
