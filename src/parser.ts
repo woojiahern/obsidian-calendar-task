@@ -365,45 +365,89 @@ export type DateKind = 'by' | 'plain';
 export interface DatedField {
 	iso: string;
 	kind: DateKind;
+	/**
+	 * The inline field the date came from, lowercased: "released", "by",
+	 * "staged". Null when the date was written bare, with no field around it.
+	 */
+	field: string | null;
+}
+
+/** Opens an inline field: "(", a key, then "::". */
+const FIELD_OPEN_RE = /^\(\s*([A-Za-z][\w-]*)\s*::/;
+
+/** Field keys that mean "this is the deadline". */
+const DEADLINE_FIELDS = new Set(['by', 'due', 'deadline']);
+
+/** Where one inline field sits on a line, and what its key is. */
+interface FieldSpan {
+	key: string;
+	start: number;
+	end: number;
 }
 
 /**
- * Matches an inline field such as (by:: 2026-09-24).
+ * Finds every inline field on a line: (released:: 2026-08-12), (by:: …),
+ * (pr:: [PR #88](https://…)) and so on.
  *
- * (when:: …) is still matched, so notes that already use it keep working and
- * the field is stripped from the text we display. It carries no special
- * meaning any more: the date inside it counts as an ordinary date.
+ * A regex cannot do this properly, because a field can hold a markdown link
+ * and that link brings its own brackets, so "[^)]*" would stop at the first
+ * ")" inside a URL. This walks the line and counts bracket depth instead, so
+ * each field is found whole.
  */
-const FIELD_RE = /\((when|by)\s*::\s*([^)]*)\)/gi;
+function inlineFieldSpans(line: string): FieldSpan[] {
+	const spans: FieldSpan[] = [];
+	let index = 0;
+
+	while (index < line.length) {
+		if (line[index] === '(') {
+			const open = FIELD_OPEN_RE.exec(line.slice(index));
+			if (open) {
+				let depth = 0;
+				let scan = index;
+				for (; scan < line.length; scan++) {
+					if (line[scan] === '(') depth++;
+					else if (line[scan] === ')') {
+						depth--;
+						if (depth === 0) {
+							scan++;
+							break;
+						}
+					}
+				}
+				spans.push({
+					key: (open[1] ?? '').toLowerCase(),
+					start: index,
+					end: scan,
+				});
+				index = scan;
+				continue;
+			}
+		}
+		index++;
+	}
+
+	return spans;
+}
 
 /**
- * Returns every valid date on a line, each tagged with what it means.
+ * Returns every valid date on a line, each tagged with where it came from.
  *
  * Two passes, because a date does not know what surrounds it:
- *   1. Record where each (when:: …) or (by:: …) field starts and ends.
- *   2. Find the dates. A date inside one of those spans takes that field's
- *      meaning. A date outside them all is plain.
+ *   1. Find the inline fields and note where each one starts and ends.
+ *   2. Find the dates. A date inside a field carries that field's key. A date
+ *      outside them all has no field.
+ *
+ * Any key counts, so "released::", "staged::" and "raised::" all work without
+ * being listed anywhere. Only the deadline keys change how an item is shown.
  *
  * Invalid dates such as 2026-13-45 are dropped by the fromIso round-trip check,
  * so a version number never lands on the calendar.
  */
 export function findDatedFields(line: string): DatedField[] {
-	const spans: Array<{ kind: DateKind; start: number; end: number }> = [];
-	FIELD_RE.lastIndex = 0;
-	let fieldMatch: RegExpExecArray | null;
-	while ((fieldMatch = FIELD_RE.exec(line)) !== null) {
-		// Only by:: changes what a date means. A legacy when:: field is stripped
-		// from the text, but the date inside it stays an ordinary date.
-		const name = (fieldMatch[1] ?? '').toLowerCase();
-		spans.push({
-			kind: name === 'by' ? 'by' : 'plain',
-			start: fieldMatch.index,
-			end: fieldMatch.index + fieldMatch[0].length,
-		});
-	}
+	const spans = inlineFieldSpans(line);
 
 	// Keyed by date, so a line never produces two entries for the same day.
-	const found = new Map<string, DateKind>();
+	const found = new Map<string, DatedField>();
 
 	// The regex is global, so reset lastIndex before each line to avoid the
 	// classic bug where a shared global regex skips matches on the next call.
@@ -415,63 +459,43 @@ export function findDatedFields(line: string): DatedField[] {
 
 		const position = dateMatch.index;
 		const span = spans.find((s) => position >= s.start && position < s.end);
-		const kind: DateKind = span?.kind ?? 'plain';
+		const field = span?.key ?? null;
+		const kind: DateKind = field && DEADLINE_FIELDS.has(field) ? 'by' : 'plain';
 
 		// A line can carry the same date twice, for example as a bare date and
 		// again as a deadline. Show it once, and keep the stronger meaning: a
-		// deadline outranks an ordinary date.
+		// deadline outranks an ordinary date, and a fielded date outranks a
+		// bare one.
 		const existing = found.get(iso);
-		if (existing !== 'by') found.set(iso, kind);
+		if (existing?.kind === 'by') continue;
+		if (existing && existing.field && !field) continue;
+		found.set(iso, { iso, kind, field });
 	}
 
-	return [...found].map(([iso, kind]) => ({ iso, kind }));
+	return [...found.values()];
 }
 
 /** Strips the list bullet, the number, and the task checkbox from a line. */
 const LIST_MARKER_RE = /^\s*(?:[-*+]|\d+[.)])\s+(?:\[.\]\s+)?/;
 
-/** Opens an inline field: "(", a key, then "::". */
-const FIELD_OPEN_RE = /^\(\s*[A-Za-z][\w-]*\s*::/;
-
 /**
  * Removes every inline field on a line, whatever its key.
  *
  * "(product:: #elsa-school)" and "(pr:: [PR #88](https://github.com/...))" are
- * metadata, not prose, so neither belongs in a one-line summary.
- *
- * A regex cannot do this properly. A field can hold a markdown link, and that
- * link brings its own brackets, so "[^)]*" would stop at the first ")" inside
- * the URL and leave the rest of the field behind. This walks the line instead
- * and counts bracket depth to find the real end of each field.
+ * metadata, not prose, so neither belongs in a one-line summary. It reuses the
+ * same bracket-depth scan that finds the fields in the first place.
  */
 function removeInlineFields(line: string): string {
+	const spans = inlineFieldSpans(line);
+	if (spans.length === 0) return line;
+
 	let result = '';
-	let index = 0;
-
-	while (index < line.length) {
-		if (line[index] === '(' && FIELD_OPEN_RE.test(line.slice(index))) {
-			let depth = 0;
-			let scan = index;
-			for (; scan < line.length; scan++) {
-				if (line[scan] === '(') depth++;
-				else if (line[scan] === ')') {
-					depth--;
-					if (depth === 0) {
-						scan++;
-						break;
-					}
-				}
-			}
-			index = scan;
-			result += ' ';
-			continue;
-		}
-
-		result += line[index];
-		index++;
+	let cursor = 0;
+	for (const span of spans) {
+		result += line.slice(cursor, span.start) + ' ';
+		cursor = span.end;
 	}
-
-	return result;
+	return result + line.slice(cursor);
 }
 
 /**

@@ -64,7 +64,24 @@ the week ahead.
 
 ## Settings
 
-**Settings → Calendar Task** holds one list: folders to leave out of the scan.
+**Only count dates in inline fields** (on by default). A date counts only when
+it is written as a field:
+
+```markdown
+- [ ] Shipped the build (released:: 2026-08-12)
+- [ ] Review with Thomas (by:: 2026-08-20)
+```
+
+Any key works — `released::`, `staged::`, `raised::`, `resolved::` — and each
+item shows which field its date came from. `by::`, `due::` and `deadline::` are
+the ones that mean a deadline, so they get the flag and the **Due** section.
+
+Turn this off to also pick up bare dates written in the text. That is the
+looser rule, and on a real vault it pulls in a lot: every `[[2026-09-15]]`
+daily-note link, every date mentioned in passing.
+
+**Excluded folders.** The rest of the tab is a list of folders to leave out of
+the scan.
 Pick a folder and the calendar stops showing anything inside it, including its
 subfolders. Useful for archives, templates, and anything else whose dates are
 history rather than plans.

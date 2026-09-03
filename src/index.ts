@@ -21,8 +21,10 @@ export interface TaskItem {
 	line: number;
 	/** True when the line is a task checkbox that is ticked. */
 	done: boolean;
-	/** Whether this date came from when::, by::, or a bare date. */
+	/** Whether this date is a deadline or an ordinary one. */
 	kind: DateKind;
+	/** The inline field the date came from, or null if it was written bare. */
+	field: string | null;
 }
 
 export class TaskIndex {
@@ -42,6 +44,9 @@ export class TaskIndex {
 
 	/** Folder paths whose notes are kept off the calendar. */
 	private excludedFolders: string[] = [];
+
+	/** When true, a date only counts inside an inline field. */
+	private requireInlineField = true;
 
 	/** Called after any change, so the view can redraw. */
 	private onChanged: () => void = () => undefined;
@@ -88,6 +93,11 @@ export class TaskIndex {
 	/** Folders whose notes never reach the calendar. */
 	setExcludedFolders(folders: string[]): void {
 		this.excludedFolders = folders;
+	}
+
+	/** Whether a date needs an inline field around it to count. */
+	setRequireInlineField(value: boolean): void {
+		this.requireInlineField = value;
 	}
 
 	/* ---------------------------------------------------------------------- */
@@ -226,7 +236,14 @@ export class TaskIndex {
 			// A line is filed under every date it contains, each tagged with what
 			// the date means. One line carrying a when:: date and a by:: date
 			// appears on both days, in the matching section.
-			const ownDates = findDatedFields(raw);
+			// Every date on the line, with the field it came from. When the
+			// setting asks for fields only, a bare date is dropped here: it is
+			// almost always a mention rather than a plan, and it is what made
+			// the calendar noisy on a real vault.
+			const allDates = findDatedFields(raw);
+			const ownDates = this.requireInlineField
+				? allDates.filter((dated) => dated.field !== null)
+				: allDates;
 
 			// No date on the line, so inherit the heading's date if there is one.
 			// An inherited date has no field around it, so it counts as plain.
@@ -235,7 +252,7 @@ export class TaskIndex {
 				ownDates.length > 0
 					? ownDates
 					: inherited
-						? [{ iso: inherited, kind: 'plain' as const }]
+						? [{ iso: inherited, kind: 'plain' as const, field: null }]
 						: [];
 
 			for (const dated of dates) {
@@ -249,6 +266,7 @@ export class TaskIndex {
 					// for an open task, anything else (usually "x") for a done one.
 					done: listItem.task !== undefined && listItem.task !== ' ',
 					kind: dated.kind,
+					field: dated.field,
 				});
 			}
 		}

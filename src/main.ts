@@ -30,7 +30,7 @@ export default class CalendarTaskPlugin extends Plugin {
 		await this.loadSettings();
 
 		this.index = new TaskIndex(this.app);
-		this.index.setExcludedFolders(this.settings.excludedFolders);
+		this.applySettingsToIndex();
 		this.index.setOnChanged(() => this.refreshViews());
 
 		this.registerView(
@@ -148,6 +148,11 @@ export default class CalendarTaskPlugin extends Plugin {
 			}
 		}
 
+		if (saved && typeof saved === 'object' && 'requireInlineField' in saved) {
+			const flag: unknown = saved.requireInlineField;
+			if (typeof flag === 'boolean') settings.requireInlineField = flag;
+		}
+
 		this.settings = settings;
 	}
 
@@ -167,15 +172,26 @@ export default class CalendarTaskPlugin extends Plugin {
 		await this.applyExclusions();
 	}
 
+	/** Switches between counting every date and only fielded ones. */
+	async setRequireInlineField(value: boolean): Promise<void> {
+		this.settings.requireInlineField = value;
+		await this.applyExclusions();
+	}
+
 	/**
-	 * Saves the folder list and rescans. A full rebuild is the honest way to
-	 * apply this: excluding a folder has to remove what it already contributed,
-	 * and including one has to pick up everything it holds.
+	 * Saves the settings and rescans. A full rebuild is the honest way to apply
+	 * any of them: excluding a folder has to remove what it already
+	 * contributed, and including one has to pick up everything it holds.
 	 */
 	private async applyExclusions(): Promise<void> {
 		await this.saveData(this.settings);
-		this.index.setExcludedFolders(this.settings.excludedFolders);
+		this.applySettingsToIndex();
 		await this.index.rebuildAll();
+	}
+
+	private applySettingsToIndex(): void {
+		this.index.setExcludedFolders(this.settings.excludedFolders);
+		this.index.setRequireInlineField(this.settings.requireInlineField);
 	}
 
 	/** Opens the calendar if needed, then shows the given day. */

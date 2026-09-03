@@ -12,10 +12,16 @@ import type CalendarTaskPlugin from './main';
 export interface CalendarTaskSettings {
 	/** Vault-relative folder paths whose notes never reach the calendar. */
 	excludedFolders: string[];
+	/**
+	 * When true, only dates written inside an inline field count, such as
+	 * (released:: 2026-08-12). A bare date sitting in the text is ignored.
+	 */
+	requireInlineField: boolean;
 }
 
 export const DEFAULT_SETTINGS: CalendarTaskSettings = {
 	excludedFolders: [],
+	requireInlineField: true,
 };
 
 /**
@@ -41,8 +47,25 @@ export class CalendarTaskSettingTab extends PluginSettingTab {
 
 	display(): void {
 		this.containerEl.empty();
+		this.renderFieldToggle();
 		this.renderAddControl();
 		this.renderExcludedList();
+	}
+
+	/** Whether a date needs an inline field around it to count. */
+	private renderFieldToggle(): void {
+		new Setting(this.containerEl)
+			.setName('Only count dates in inline fields')
+			.setDesc(
+				'A date counts only when it is written as a field, such as (released:: 2026-08-12) or (by:: 2026-08-20). Any field name works. Turn this off to also pick up bare dates written in the text.',
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.requireInlineField)
+					.onChange(async (value) => {
+						await this.plugin.setRequireInlineField(value);
+					}),
+			);
 	}
 
 	/** The picker for adding a folder to the list. */

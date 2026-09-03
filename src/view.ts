@@ -294,7 +294,15 @@ export class CalendarView extends ItemView {
 			setIcon(flag, 'flag');
 			flag.setAttribute('aria-label', 'Deadline');
 		}
-		row.createDiv({ cls: 'calendar-task-item-source', text: item.sourceName });
+		const source = row.createDiv({ cls: 'calendar-task-item-source' });
+		source.createSpan({ text: item.sourceName });
+
+		// Name the field the date came from, so "released" and "staged" on the
+		// same day are told apart without opening the note. A deadline is left
+		// out: its flag already says what it is.
+		if (item.field && item.kind !== 'by') {
+			source.createSpan({ cls: 'calendar-task-item-field', text: item.field });
+		}
 
 		row.addEventListener('click', () => {
 			void this.openItem(item);
