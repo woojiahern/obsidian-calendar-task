@@ -28,7 +28,11 @@ export default class CalendarTaskPlugin extends Plugin {
 			(leaf: WorkspaceLeaf) => new CalendarView(leaf, this.index),
 		);
 
-		this.registerEditorSuggest(new DateSuggest(this.app));
+		const dateSuggest = new DateSuggest(this.app);
+		this.registerEditorSuggest(dateSuggest);
+		// The popup listens on the document while it is open. Closing it on
+		// unload makes sure that listener goes with the plugin.
+		this.register(() => dateSuggest.close());
 
 		// Draw dates as chips: the CodeMirror extension covers the editor, the
 		// post-processor covers Reading view. Clicking a chip in either one

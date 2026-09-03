@@ -7,7 +7,7 @@
  * again clears the selection and brings the week back.
  */
 
-import { ItemView, MarkdownView, TFile, WorkspaceLeaf, setIcon } from 'obsidian';
+import { ItemView, MarkdownView, WorkspaceLeaf, setIcon } from 'obsidian';
 import { TaskIndex, TaskItem } from './index';
 import {
 	WEEKDAY_LABELS,
@@ -306,8 +306,8 @@ export class CalendarView extends ItemView {
 	/* ---------------------------------------------------------------------- */
 
 	private async openItem(item: TaskItem): Promise<void> {
-		const file = this.app.vault.getAbstractFileByPath(item.path);
-		if (!(file instanceof TFile)) return;
+		const file = this.app.vault.getFileByPath(item.path);
+		if (!file) return;
 
 		// false means reuse the active pane in the main area rather than split.
 		const leaf = this.app.workspace.getLeaf(false);

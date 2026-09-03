@@ -4,7 +4,7 @@ An Obsidian plugin. Tag a line with a date, then see that line on a sidebar cale
 
 ## What it does
 
-**Type `@` and a letter** on any line, and the commands appear. There are four:
+**Type `@`** on any line and the four commands appear:
 
 | Command     | What it writes      | What it does                    |
 | ----------- | ------------------- | ------------------------------- |
@@ -13,8 +13,9 @@ An Obsidian plugin. Tag a line with a date, then see that line on a sidebar cale
 | `@date`     | `2026-09-24`        | opens the calendar to pick a day |
 | `@due`      | `(by:: 2026-09-24)` | opens the calendar to pick a deadline |
 
-`@t` offers today and tomorrow. `@d` offers date and due. A bare `@` opens
-nothing, so email addresses and `@names` are left alone.
+Keep typing to narrow them: `@t` leaves today and tomorrow, `@d` leaves date
+and due. The `@` has to start a line or follow a space, so email addresses are
+left alone.
 
 `@today` and `@tomorrow` show the date they will insert, and Enter writes it.
 `@date` and `@due` open a calendar at the cursor: click a day, press a quick
@@ -146,20 +147,35 @@ then switch the plugin on in **Settings → Community plugins**.
 
 ## Publish it
 
-1. Push this folder to a public GitHub repo.
-2. Set the version in `manifest.json`, for example `0.1.0`.
-3. Create a GitHub release. The tag must be the version with no `v` in front:
-   `0.1.0`, not `v0.1.0`.
-4. Attach `main.js`, `manifest.json`, and `styles.css` to the release as
-   separate files. The auto-generated source zip is not enough.
+Only three files ship: `main.js`, `manifest.json`, and `styles.css`.
 
-Other people can now install it with the BRAT plugin by pasting the repo name.
+A GitHub Action in `.github/workflows/release.yml` does the build. Push a tag
+and it compiles the plugin and opens a **draft** release with those three files
+attached:
 
-For the community plugin store, open a pull request against
-[obsidianmd/obsidian-releases](https://github.com/obsidianmd/obsidian-releases)
-adding an entry to `community-plugins.json`. The Obsidian team reviews it. They
-require a public repo, a LICENSE, a README, `manifest.json` at the repo root,
-and a release tagged as above. First review usually takes a few weeks.
+```bash
+git tag 0.1.0 && git push origin 0.1.0
+```
+
+The tag must match the `version` in `manifest.json` exactly, with no `v` in
+front: `0.1.0`, not `v0.1.0`. Publish the draft release on GitHub when you are
+ready.
+
+Anyone can then install it with the BRAT plugin by pasting the repo name.
+
+## Submit it to the community directory
+
+1. Make the repo **public**. A private repo cannot be submitted.
+2. Publish a release, as above.
+3. Go to [community.obsidian.md](https://community.obsidian.md), sign in with
+   your Obsidian account, and link your GitHub account.
+4. Add the plugin there. Obsidian reads `manifest.json` from the default
+   branch.
+5. An automated review runs. Fix anything it flags, then publish a new release
+   with the version bumped, until it passes.
+
+This replaced the old process of opening a pull request against
+`obsidianmd/obsidian-releases`.
 
 ## The test vault
 
