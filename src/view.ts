@@ -70,6 +70,14 @@ export class CalendarView extends ItemView {
 		this.render();
 	}
 
+	/** Jumps the calendar to today, and lists what is on it. */
+	goToToday(): void {
+		const today = startOfToday();
+		this.displayMonth = firstOfMonth(today);
+		this.selectedDate = toIso(today);
+		this.render();
+	}
+
 	/** Jumps the calendar to a day. Clicking a date chip in a note lands here. */
 	selectDate(iso: string): void {
 		const date = fromIso(iso);
@@ -118,10 +126,7 @@ export class CalendarView extends ItemView {
 			text: 'Today',
 		});
 		todayButton.addEventListener('click', () => {
-			const today = startOfToday();
-			this.displayMonth = firstOfMonth(today);
-			this.selectedDate = toIso(today);
-			this.render();
+			this.goToToday();
 		});
 
 		this.createIconButton(controls, 'chevron-right', 'Next month', () => {

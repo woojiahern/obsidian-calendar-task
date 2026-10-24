@@ -7,7 +7,7 @@
  *   view.ts     the sidebar calendar
  */
 
-import { Plugin, TFile, WorkspaceLeaf } from 'obsidian';
+import { Platform, Plugin, TFile, WorkspaceLeaf } from 'obsidian';
 import { createDateChipExtension, renderChipsInReadingView } from './chip';
 import { TaskIndex } from './index';
 import { DateSuggest } from './suggest';
@@ -81,7 +81,7 @@ export default class CalendarTaskPlugin extends Plugin {
 		// populated until Obsidian has finished starting up.
 		this.app.workspace.onLayoutReady(() => {
 			void this.index.rebuildAll();
-			void this.activateView();
+			void this.openOnStartup();
 		});
 	}
 
@@ -219,6 +219,27 @@ export default class CalendarTaskPlugin extends Plugin {
 		});
 	}
 
+	/**
+	 * Startup behaviour, which differs by platform.
+	 *
+	 * On desktop the calendar sits in a side pane next to your note, so opening
+	 * it costs nothing. On mobile the right sidebar is a drawer over the whole
+	 * screen: opening it there would hide Obsidian behind the calendar every
+	 * time the app starts. So on mobile we only put the view in the drawer, and
+	 * leave the drawer shut until you ask for it.
+	 *
+	 * Either way the calendar lands on today, so a new day starts on that day.
+	 */
+	private async openOnStartup(): Promise<void> {
+		if (Platform.isMobile) await this.ensureView(false);
+		else await this.activateView();
+
+		for (const leaf of this.app.workspace.getLeavesOfType(CALENDAR_VIEW_TYPE)) {
+			const view = leaf.view;
+			if (view instanceof CalendarView) view.goToToday();
+		}
+	}
+
 	/** Opens the calendar if needed, then shows the given day. */
 	private async showDate(iso: string): Promise<void> {
 		await this.activateView();
@@ -236,18 +257,27 @@ export default class CalendarTaskPlugin extends Plugin {
 		}
 	}
 
+	/**
+	 * Puts the calendar in the right sidebar if it is not there yet, and hands
+	 * back its leaf. Nothing is revealed and no sidebar is opened.
+	 */
+	private async ensureView(active: boolean): Promise<WorkspaceLeaf | null> {
+		const existing = this.app.workspace.getLeavesOfType(CALENDAR_VIEW_TYPE)[0];
+		if (existing) return existing;
+
+		const leaf = this.app.workspace.getRightLeaf(false);
+		if (!leaf) return null;
+		// Only a new leaf needs its view set. Doing this to a leaf that is
+		// already showing the calendar would tear the view down and rebuild
+		// it, losing the day you had selected.
+		await leaf.setViewState({ type: CALENDAR_VIEW_TYPE, active });
+		return leaf;
+	}
+
 	/** Opens the calendar in the right sidebar, or reveals it if already open. */
 	private async activateView(): Promise<void> {
-		let leaf = this.app.workspace.getLeavesOfType(CALENDAR_VIEW_TYPE)[0] ?? null;
-
-		if (!leaf) {
-			leaf = this.app.workspace.getRightLeaf(false);
-			if (!leaf) return;
-			// Only a new leaf needs its view set. Doing this to a leaf that is
-			// already showing the calendar would tear the view down and rebuild
-			// it, losing the day you had selected.
-			await leaf.setViewState({ type: CALENDAR_VIEW_TYPE, active: true });
-		}
+		const leaf = await this.ensureView(true);
+		if (!leaf) return;
 
 		await this.app.workspace.revealLeaf(leaf);
 
